@@ -52,9 +52,9 @@ void fetch() {
     pc += 4;
 }
 
-int step_counter = 0;
+int step_counter = 1;
 void step() {
-    printf("----------STEP %d -----------\n", step_counter);
+    //printf("----------STEP %d -----------\n", step_counter);
     fetch();
     decode(ic);
     //debug_decode(ic);
@@ -66,9 +66,9 @@ void step() {
         pc = ic.pc;
     }
 
-    dump_reg('h', false);
+    // dump_reg('h', false);
 
-    dump_mem(0x2000, 0x2014, 'h');
+    //dump_mem(0x2000, 0x2014, 'h');
     step_counter += 1;
    
 }
@@ -222,6 +222,16 @@ void print_instr(instruction_context_st& ic) {
     cout << "imm20_u: " << ic.imm20_u << endl;
     cout << "imm21: " << ic.imm21 << endl;
 }
+
+int logSh3(int32_t x, int32_t n) {
+    int mask = ~2 + 1;
+    int shiftAmount = 31 + ((~n) + 1);//this evaluates to 31 - n on two's complement machines
+    mask = mask << shiftAmount;
+    mask = ~mask;//If n equals 0, it means we have negated all bits and hence have mask = 0
+    x = x >> n;
+    return x & mask;
+}
+
 void execute(instruction_context_st& ic) {
     uint32_t t = 0;
     breg[0] = 0;
@@ -270,17 +280,18 @@ void execute(instruction_context_st& ic) {
             breg[ic.rd] = lbu(breg[ic.rs1], ic.imm12_i);             break;
 
        case I_jal:
+           if (ic.rd == 0) {
+               ic.rd = RA;
+           }
             breg[ic.rd] = ic.pc + 4;
             pc_branch(ic.imm21, ic); 
             break;
 
         case I_jalr:       
             // Talvez exista um caso em que o rd seja o ra
-            if (ic.rd == 0) {
-                ic.rd = RA;
-            }
+           
             t = ic.pc + 4;
-            ic.pc = (breg[ic.rd] + ic.imm12_i);
+            ic.pc = (breg[ic.rs1] + ic.imm12_i);
             ic.pc = ic.pc & ~1;
             breg[ic.rd] = t;
             break;
@@ -312,6 +323,9 @@ void execute(instruction_context_st& ic) {
         case I_slli:
             breg[ic.rd] = breg[ic.rs1] << ic.shamt;         break;
 
+        case I_srli:            
+            breg[ic.rd] = logSh3(breg[ic.rs1], ic.shamt);  break;
+
         case I_srai:
             breg[ic.rd] = breg[ic.rs1] >> ic.shamt;         break;
 
@@ -337,7 +351,6 @@ void execute(instruction_context_st& ic) {
             if (breg[A7] == 1) {
                 cout << (int32_t)breg[A0] << endl;
             }else if (breg[A7] == 4) {
-                printf("\n");
                 int pos, offset;
                 char a;
                 pos = breg[A0] >> 2;
@@ -345,7 +358,7 @@ void execute(instruction_context_st& ic) {
 
                 do {
                     a = (mem[pos] >> (offset * 8)) & 0xFF;
-                    cout << a;
+                    cout << dec << a;
                     offset++;
                     if (offset >= 4) {
                         pos++;
@@ -357,6 +370,9 @@ void execute(instruction_context_st& ic) {
                 printf("Encerrando programa.");
                 exit(0);
             }
+            break;
+
+        case I_nop:
             break;
         default:
             printf("Instrucao nao implementada ", ic.ins_code);
@@ -385,7 +401,7 @@ void debug_decode(instruction_context_st& ic) {
 }
 
 void dump_reg(char format, bool include_zero = true) {
-
+    printf("\n");
     auto base = (format == 'h') ? hex : dec;
     for (int i = 0; i < 32; i++) {
         if (breg[i] == 0 && !include_zero)
@@ -397,12 +413,13 @@ void dump_reg(char format, bool include_zero = true) {
     printf("PC pra proxima instrucao: ");
     
     cout << "pc = " << base << ic.pc << endl;
-    // cout << "hi = " << base << hi << endl;
-    // cout << "lo = " << base << lo << endl;
+    cout << "hi = " << base << hi << endl;
+    cout << "lo = " << base << lo << endl;
    
 }
 
 void dump_mem(int start, int end, char format){
+    printf("\n");
     if (format == 'h') {
         for (auto i = start; i <= end; i += 4) {
             printf("%x \t%x\n", i, lw(i, 0));
