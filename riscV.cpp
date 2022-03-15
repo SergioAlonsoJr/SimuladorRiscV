@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_DEPRECATE
 #include "globals.h"
 #include <array>
 #include <vector>
@@ -8,8 +9,7 @@ using namespace std;
 int32_t breg[32];
 uint32_t pc = 0x00000000;				// contador de programa
 uint32_t ri = 0x00000000;				// registrador de intrucao
-uint32_t sp = 0x00003ffc;               // stack pointer
-uint32_t gp = 0x00001800;               // global pointer
+           
 uint32_t hi = 0x00000000;
 uint32_t lo = 0x00000000;
 
@@ -29,23 +29,51 @@ funct7;					// constante instrucao tipo J
 
 instruction_context_st ic;
 
+void init() {
+    breg[SP] = 0x00003ffc;                  // stack pointer
+    breg[GP] = 0x00001800;                  // global pointer
+    load_mem("code.bin", 0);
+    load_mem("data.bin", 0x2000);
+}
+
 
 uint32_t unsign(int32_t x) {
     return (uint32_t)x;
 }
 
-// TODO: Será que modifico o ic.pc ou pc direto?
 void pc_branch(int32_t offset, instruction_context_st& ic) {
     ic.pc += offset;
 }
-
-
 
 void fetch() {
     ri = mem[pc >> 2];
     ic.ri = ri;
     ic.pc = pc;
     pc += 4;
+}
+
+void step() {
+    fetch();
+    decode(ic);
+    //debug_decode(ic);
+    execute(ic);
+    if (ic.pc + 4 == pc) {
+        ic.pc = pc;
+    }
+    else {
+        pc = ic.pc;
+    }
+
+    //dump_reg('h');
+
+    //dump_mem(0x2000, 0x2100, 'h');
+    //printf("---------------------\n");
+}
+
+void run() {
+    while (ic.pc < 0x2000) {
+        step();
+    }
 }
 
 void decode (instruction_context_st& ic) {
@@ -191,17 +219,6 @@ void print_instr(instruction_context_st& ic) {
     cout << "imm20_u: " << ic.imm20_u << endl;
     cout << "imm21: " << ic.imm21 << endl;
 }
-/*
- I_add,	I_addi, I_and,  I_andi, I_auipc,
-    I_beq,	I_bge,	I_bgeu, I_blt,  I_bltu,
-    I_bne,  I_jal,	I_jalr, I_lb,	I_lbu,
-    I_lw,   I_lh,   I_lhu,  I_lui,  I_sb,
-    I_sh,   I_sw,   I_sll,  I_slt,  I_slli,
-    I_srl,  I_sra,  I_sub,  I_slti, I_sltiu,
-    I_xor,	I_or,	I_srli, I_srai,  I_sltu,
-    I_ori, I_ecall, I_xori, I_nop
-
-*/
 void execute(instruction_context_st& ic) {
     uint32_t t = 0;
     breg[0] = 0;
@@ -254,15 +271,14 @@ void execute(instruction_context_st& ic) {
             pc_branch(ic.imm21, ic); 
             break;
 
-        case I_jalr:            
+        case I_jalr:       
+            // Talvez exista um caso em que o rd seja o ra
             breg[ic.rd] = ic.pc + 4;
             pc = (breg[ic.rs1] + ic.imm12_i) & ~1;
             break;
 
         case I_sb:
             sb(breg[ic.rs1], ic.imm12_s, (int8_t) breg[ic.rs2]);   break;
-
-
       /*  
         case I_sh:
             sh(breg[ic.rs1], ic.imm12_s, (int16_t)breg[ic.rs2]);   break;*/
@@ -312,14 +328,39 @@ void execute(instruction_context_st& ic) {
         case I_or:
             breg[ic.rd] = breg[ic.rs1] | breg[ic.rs2];      break;
 
+        case I_ecall:
+            if (breg[A7] == 1) {
+                cout << (int32_t)breg[A0] << endl;
+            }else if (breg[A7] == 4) {
+                printf("\n");
+                int pos, offset;
+                char a;
+                pos = breg[A0] >> 2;
+                offset = breg[A0] % 4;
+
+                do {
+                    a = (mem[pos] >> (offset * 8)) & 0xFF;
+                    cout << a;
+                    offset++;
+                    if (offset >= 4) {
+                        pos++;
+                        offset = 0;
+                    }
+                } while (a != 0x00);
+                printf("\n");
+            }
+            else if (breg[A7] == 10) {
+                printf("Encerrando programa.");
+                exit(0);
+            }
+
     }
 
-    pc = ic.pc;
 }
 
 void debug_decode(instruction_context_st& ic) {
-    cout << "pc = " << pc << endl;
-    cout << "instruction = " << ic.ins_code << endl;
+    cout << "pc = " << ic.pc << endl;
+    cout << "instruction = " <<  hex <<ic.ri << endl;
     cout << "format = " << ic.ins_format << endl;
 
     cout << hex << "opcode = " << ic.ins_code << endl;
@@ -338,13 +379,14 @@ void debug_decode(instruction_context_st& ic) {
 void dump_reg(char format) {
     for (int i = 0; i < 32; i++) {
         if (format == 'h') {
-            cout << "BREG[" << i << "] = " << hex <<breg[i] << endl;
+            cout << "BREG[" << dec<< i << "] = " << hex <<breg[i] << endl;
         }
         else {
-            cout << "BREG[" << i << "] = " << breg[i] << endl;
+            cout << "BREG[" << dec << i << "] = " << breg[i] << endl;
         }
     }
 
+    printf("PC pra proxima instrucao: ");
     if (format == 'h') {
         cout << "pc = " << hex << ic.pc << endl;
         cout << "hi = " << hex << hi << endl;
@@ -392,6 +434,7 @@ int load_mem(const char* fn, int start) {
 }
 
 int main() {
-    
+    init();
+    run();
     return 0;
 }
