@@ -52,7 +52,9 @@ void fetch() {
     pc += 4;
 }
 
+int step_counter = 0;
 void step() {
+    printf("----------STEP %d -----------\n", step_counter);
     fetch();
     decode(ic);
     //debug_decode(ic);
@@ -64,10 +66,11 @@ void step() {
         pc = ic.pc;
     }
 
-    //dump_reg('h');
+    dump_reg('h', false);
 
-    //dump_mem(0x2000, 0x2100, 'h');
-    //printf("---------------------\n");
+    dump_mem(0x2000, 0x2014, 'h');
+    step_counter += 1;
+   
 }
 
 void run() {
@@ -264,7 +267,7 @@ void execute(instruction_context_st& ic) {
             breg[ic.rd] = lw(breg[ic.rs1], ic.imm12_i);            break;
 
         case I_lbu:
-            breg[ic.rd] = lbu(breg[ic.rs1], ic.imm12_s);             break;
+            breg[ic.rd] = lbu(breg[ic.rs1], ic.imm12_i);             break;
 
        case I_jal:
             breg[ic.rd] = ic.pc + 4;
@@ -273,15 +276,17 @@ void execute(instruction_context_st& ic) {
 
         case I_jalr:       
             // Talvez exista um caso em que o rd seja o ra
-            breg[ic.rd] = ic.pc + 4;
-            pc = (breg[ic.rs1] + ic.imm12_i) & ~1;
+            if (ic.rd == 0) {
+                ic.rd = RA;
+            }
+            t = ic.pc + 4;
+            ic.pc = (breg[ic.rd] + ic.imm12_i);
+            ic.pc = ic.pc & ~1;
+            breg[ic.rd] = t;
             break;
 
         case I_sb:
             sb(breg[ic.rs1], ic.imm12_s, (int8_t) breg[ic.rs2]);   break;
-      /*  
-        case I_sh:
-            sh(breg[ic.rs1], ic.imm12_s, (int16_t)breg[ic.rs2]);   break;*/
 
         case I_sw:
             sw(breg[ic.rs1], ic.imm12_s, breg[ic.rs2]);   break;
@@ -347,12 +352,15 @@ void execute(instruction_context_st& ic) {
                         offset = 0;
                     }
                 } while (a != 0x00);
-                printf("\n");
             }
             else if (breg[A7] == 10) {
                 printf("Encerrando programa.");
                 exit(0);
             }
+            break;
+        default:
+            printf("Instrucao nao implementada ", ic.ins_code);
+            break;
 
     }
 
@@ -376,32 +384,27 @@ void debug_decode(instruction_context_st& ic) {
 
 }
 
-void dump_reg(char format) {
+void dump_reg(char format, bool include_zero = true) {
+
+    auto base = (format == 'h') ? hex : dec;
     for (int i = 0; i < 32; i++) {
-        if (format == 'h') {
-            cout << "BREG[" << dec<< i << "] = " << hex <<breg[i] << endl;
-        }
-        else {
-            cout << "BREG[" << dec << i << "] = " << breg[i] << endl;
-        }
+        if (breg[i] == 0 && !include_zero)
+            continue;
+
+        cout << "BREG[" << dec<< i << "] = " << base <<breg[i] << endl;
     }
 
     printf("PC pra proxima instrucao: ");
-    if (format == 'h') {
-        cout << "pc = " << hex << ic.pc << endl;
-        cout << "hi = " << hex << hi << endl;
-        cout << "lo = " << hex << lo << endl;
-    }
-    else {
-        cout << "pc = "  << ic.pc << endl;
-        cout << "hi = " << hi << endl;
-        cout << "lo = " << lo << endl;
-    }
+    
+    cout << "pc = " << base << ic.pc << endl;
+    // cout << "hi = " << base << hi << endl;
+    // cout << "lo = " << base << lo << endl;
+   
 }
 
 void dump_mem(int start, int end, char format){
     if (format == 'h') {
-        for (auto i = start; i < end; i += 4) {
+        for (auto i = start; i <= end; i += 4) {
             printf("%x \t%x\n", i, lw(i, 0));
         }
 

@@ -147,7 +147,7 @@ void print_instr(instruction_context_st& ic);
 INSTRUCTIONS get_instr_code(uint32_t opcode, uint32_t func3, uint32_t func7);
 FORMATS get_i_format(uint32_t opcode, uint32_t func3, uint32_t func7);
 void debug_decode(instruction_context_st& ic);
-void dump_reg(char format);
+void dump_reg(char format, bool include_zero);
 void dump_mem(int start_byte, int end_byte, char format);
 int load_mem(const char *fn, int start);
 void execute (instruction_context_st& ic);
